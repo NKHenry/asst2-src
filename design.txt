@@ -1,0 +1,88 @@
+Kevin Luo and Nathaniel Henry design document
+z3419400
+z***************************
+
+
+**********File System Structures********************
+
+file.h
+
+struct file_descriptor
+- Holds *v_node, lock for itself, offset in file
+
+struct open_file_table
+- use this as our global open file table
+- Holds an array of file_descriptor and a count of how many entries
+are in the array
+
+
+proc.h
+
+struct proc
+- added an integer array oft[OPEN_MAX], the entries in the array 
+correspond to an index in the gft in file.c
+- added an integer count, represents the number of entries in
+our per process oft
+
+
+
+************* Other Updated Files ********************
+
+Proc.c
+- edited the bootstrap function to initialise the the per process
+oft / reserve first 3 entries for stdin, stdout, stderr
+
+Main.c
+- Added file_bootstrap() function call to initialise gft / attach
+console to stdout / stdin
+
+
+****************** File.c Implementations ******************
+
+int sys_open(const char *filename, int flags, int mode, int *retval)
+- use copyinstr to get filename from userland
+- create file descriptor and declare new vnode
+- call vfs_open (filename, flags, mode, &vn)
+- attach vnode to fd
+- insert fd into gft (if there's space)
+- update per process oft to include index of fd
+- return the index of fd in retval
+
+
+int sys_close(int fd)
+- acquire lock of gft->files[fd]
+- call vfs_close on corresponding vnode
+- decrement count and destroy fd
+- free space in the per process oft
+
+
+int sys_read(int fd, void *buf, size_t size, int *retval)
+- declare a kernel buffer and set up a new UIO to read to it
+- Use uio_kinit to initialise UIO
+- use VOP_READ to read data into kernel buffer
+- use copyout to transfer contents of kernel buffer to user buffer
+- set file offset to equal u.uio_offset
+- return size - u.uio_resid (number of bytes read)
+
+
+int sys_write(int fd, const void *buf, size_t size, int *retval)
+- declare kernel buffer
+- use copyin to copy user buffer into kernel buffer
+- initlaise UIO object with kernel buffer in write mode
+- use VOP_WRITE to write kernel buffer to file
+- set fd offset to u.uio_offset
+
+
+int sys_dup2(int fd, int new_fd, int *retval)
+
+
+int sys_lseek(int fd, off_t pos, int switch_code, off_t *retval)
+
+
+void file_bootstrap()
+- create oft
+- use vfs_open to open console
+- attach console to stdin, stdout, stderr, and store in gft[0,1,2]
+
+
+
